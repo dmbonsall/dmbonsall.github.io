@@ -1,6 +1,6 @@
 ---
 title: "TIL: FastAPI Supports Extended HTTP Methods"
-date: 2024-05-09T08:00:00
+date: 2024-06-21T20:00:00
 draft: False
 ---
 
