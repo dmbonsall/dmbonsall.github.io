@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="generator" content="Pelican" />
+        <title>"TIL: AWS WAF Rejects Request with localhost URLs in Body"</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+        <meta name="description" content="While testing out a new feature for an AWS app, I encountered 403 errors on HTTP requests being placed to the service I had built. The error..." />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">dmbonsall.github.io</a></h1>
+                <nav><ul>
+                    <li class="active"><a href="/category/posts.html">posts</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="/til-aws-waf-rejects-request-with-localhost-urls-in-body.html" rel="bookmark"
+           title="Permalink to "TIL: AWS WAF Rejects Request with localhost URLs in Body"">"TIL: AWS WAF Rejects Request with localhost URLs in Body"</a></h1>
+    </header>
+
+    <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2024-05-09T08:00:00-05:00">
+                Published: Thu 09 May 2024
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/david-bonsall.html">David Bonsall</a>
+        </address>
+<p>In <a href="/category/posts.html">posts</a>.</p>
+
+</footer><!-- /.post-info -->      <p>While testing out a new feature for an AWS app, I encountered 403 errors on HTTP requests being placed to the service I had built. The error response body contained HTML for a generic AWS Cloudfront 403 Forbidden error page prompting me to try again later, or contact my sys admin. I was able to confirm through the Cloudfront UI that the request was indeed blocked, but for some reason, other requests from the same source to the same host were being let through on other routes. For example <code>POST /resource1</code> was ok but <code>POST /resource2</code> was not even though the source and host information for both requests were the same.</p>
+<p>The error page provides a cloudfront request id that allows you to look up the individual request in logs for cloudfront and AWS Web Application Firewall (WAF). The WAF logs indicated that my blocked request violated the <code>EC2MetaDataSSRF_BODY</code> rule in the <a href="https://docs.aws.amazon.com/waf/latest/developerguide/aws-managed-rule-groups-baseline.html"><code>AWSManagedRulesCommonRuleSet</code></a>. The description of this rule is not particularly helpful:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">Inspects</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">attempts</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">exfiltrate</span><span class="w"> </span><span class="nv">Amazon</span><span class="w"> </span><span class="nv">EC2</span><span class="w"> </span><span class="nv">metadata</span><span class="w"> </span><span class="nv">from</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">request</span><span class="w"> </span><span class="nv">body</span>.
+</code></pre></div>
+
+<p>A <a href="https://www.reddit.com/r/aws/comments/g9trin/what_do_the_aws_managed_waf_rules_actually_mean/">reddit post</a> shines a bit more light on the subject and indicated that this rule will block requests with URLs that point to <code>localhost</code>, <code>127.0.0.1</code>, etc. The request I was making included a callback URL (think webhook) that was defaulted to <code>http://localhost</code> from testing on my local machine. Changing the URL to something else (or blanking it out for that matter) allowed the request to get through the WAF unimpeded.</p>
+    </div><!-- /.entry-content -->
+
+  </article>
+</section>
+        <section id="extras" class="body">
+                <div class="blogroll">
+                        <h2>links</h2>
+                        <ul>
+                            <li><a href="https://github.com/dmbonsall">Github</a></li>
+                        </ul>
+                </div><!-- /.blogroll -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a rel="nofollow" href="https://getpelican.com/">Pelican</a>, which takes great advantage of <a rel="nofollow" href="https://www.python.org/">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a rel="nofollow" href="https://www.smashingmagazine.com/2009/08/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
