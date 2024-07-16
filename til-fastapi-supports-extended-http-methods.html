@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="generator" content="Pelican" />
+        <title>"TIL: FastAPI Supports Extended HTTP Methods"</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+        <meta name="description" content="The other day, I was looking to emulate some webDAV functionality that required use of non-standard HTTP methods: LOCK and UNLOCK. While these are..." />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">dmbonsall.github.io</a></h1>
+                <nav><ul>
+                    <li class="active"><a href="/category/posts.html">posts</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="/til-fastapi-supports-extended-http-methods.html" rel="bookmark"
+           title="Permalink to "TIL: FastAPI Supports Extended HTTP Methods"">"TIL: FastAPI Supports Extended HTTP Methods"</a></h1>
+    </header>
+
+    <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2024-06-21T20:00:00-05:00">
+                Published: Fri 21 June 2024
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/david-bonsall.html">David Bonsall</a>
+        </address>
+<p>In <a href="/category/posts.html">posts</a>.</p>
+
+</footer><!-- /.post-info -->      <p>The other day, I was looking to emulate some webDAV functionality that required use of non-standard HTTP methods: <code>LOCK</code> and <code>UNLOCK</code>. While these are fully specified in <a href="https://datatracker.ietf.org/doc/html/rfc4918#section-9.10">RFC 4918</a>, they are not the kind of thing you typically see explicitly supported by web frameworks out of the box. Neither FastAPI nor aiohttp show support in their documentation, so I decided to poke around in FastAPI to see if there was a way to get it to accept these two verbs.</p>
+<p>There's nothing really special about any individual HTTP method since they're just a verb used in routing requests that, when used properly, help give the client a semantic understanding of the API. This means that there's no real functional difference between <code>GET /resource</code> and <code>PUT /resource</code> even though we semantically understand that <code>GET</code> will return the data representing <code>/resource</code> and <code>PUT</code> will update <code>/resource</code> with data that we specify. Functionally speaking, you could swap them and most servers wouldn't know the difference. According to <a href="https://datatracker.ietf.org/doc/html/rfc2616#section-9">RFC 2616</a>, you could even create your own verb like <code>FANCYGET</code> and use it in your API:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">The</span><span class="w"> </span><span class="nv">set</span><span class="w"> </span><span class="nv">of</span><span class="w"> </span><span class="nv">common</span><span class="w"> </span><span class="nv">methods</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">HTTP</span><span class="o">/</span><span class="mi">1</span>.<span class="mi">1</span><span class="w"> </span><span class="nv">is</span><span class="w"> </span><span class="nv">defined</span><span class="w"> </span><span class="nv">below</span>.<span class="w"> </span><span class="nv">Although</span>
+<span class="nv">this</span><span class="w"> </span><span class="nv">set</span><span class="w"> </span><span class="nv">can</span><span class="w"> </span><span class="nv">be</span><span class="w"> </span><span class="nv">expanded</span>,<span class="w"> </span><span class="nv">additional</span><span class="w"> </span><span class="nv">methods</span><span class="w"> </span><span class="nv">cannot</span><span class="w"> </span><span class="nv">be</span><span class="w"> </span><span class="nv">assumed</span><span class="w"> </span><span class="nv">to</span>
+<span class="nv">share</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">same</span><span class="w"> </span><span class="nv">semantics</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">separately</span><span class="w"> </span><span class="nv">extended</span><span class="w"> </span><span class="nv">clients</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">servers</span>.
+</code></pre></div>
+
+<p>This is a good example of something you <em>could</em> do but definitely <em>should not</em> do for many reasons, not least of which include interoperability, security, and general convention. This point just serves to illustrate that a REST framework that can handle the standard HTTP methods likely already has all the mechanics needed to handle extended methods like <code>LOCK</code> and <code>UNLOCK</code>.</p>
+<p>The standard FastAPI method of creating a REST handler is to just use the <code>@app.&lt;method&gt;</code> decorator:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">fastapi</span> <span class="kn">import</span> <span class="n">FastAPI</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">()</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/resource&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span> <span class="nf">get_resource</span><span class="p">():</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;myresource&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<p>Unfortunately, there's no easy <code>@app.lock</code> method to use in our case. But if we look under the hood of the <code>@app.get</code> decorator, we can find some hints about extending to other methods. The <code>FastAPI::get</code> decorators eventually calls <code>fastapi.routing.APIRouter::add_api_route</code> down the line, and there is a method by the same name on the <code>FastAPI</code> class that directly calls <code>APIRouter::add_api_route</code>. This python method takes the HTTP method as a string, so we can write a bit of code to try to use our <code>LOCK</code> method:</p>
+<div class="highlight"><pre><span></span><code><span class="k">async</span> <span class="k">def</span> <span class="nf">lock_resource</span><span class="p">():</span>
+    <span class="o">...</span>
+
+<span class="n">app</span><span class="o">.</span><span class="n">add_api_route</span><span class="p">(</span><span class="s2">&quot;/resource&quot;</span><span class="p">,</span> <span class="n">lock_resource</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;LOCK&quot;</span><span class="p">])</span>
+</code></pre></div>
+
+<p>If we run this code and place a request with something like curl, we'll see that the server accepts the request and returns a response:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-XLOCK<span class="w"> </span>http://localhost:8000/resource
+</code></pre></div>
+
+<p>It's very important to note that just because FastAPI supports any method, the ASGI server underneath and any proxies in between your server and the clients also have to support it. This poses a practical issue when trying to run your app since the proxy or ASGI server will likely reject the request before it even gets to your app. <code>LOCK</code> and <code>UNLOCK</code> happen to be supported by uvicorn (it appears to have support for the WebDAV extended methods) and many proxies have ways to enable WebDAV extensions. <code>FANCYGET</code>, on the other hand, is not likely to be supported.</p>
+    </div><!-- /.entry-content -->
+
+  </article>
+</section>
+        <section id="extras" class="body">
+                <div class="blogroll">
+                        <h2>links</h2>
+                        <ul>
+                            <li><a href="https://github.com/dmbonsall">Github</a></li>
+                        </ul>
+                </div><!-- /.blogroll -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a rel="nofollow" href="https://getpelican.com/">Pelican</a>, which takes great advantage of <a rel="nofollow" href="https://www.python.org/">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a rel="nofollow" href="https://www.smashingmagazine.com/2009/08/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>

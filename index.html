@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="generator" content="Pelican" />
+        <title>dmbonsall.github.io</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">dmbonsall.github.io</a></h1>
+                <nav><ul>
+                    <li><a href="/category/posts.html">posts</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+
+            <aside id="featured" class="body">
+                <article>
+                    <h1 class="entry-title"><a href="/efficiently-generating-random-strings-in-python.html">"Efficiently Generating Random Strings in Python"</a></h1>
+<footer class="post-info">
+        <abbr class="published" title="2024-07-15T20:00:00-05:00">
+                Published: Mon 15 July 2024
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/david-bonsall.html">David Bonsall</a>
+        </address>
+<p>In <a href="/category/posts.html">posts</a>.</p>
+
+</footer><!-- /.post-info --><p>The other day I had a need to generate a random eight character string in python to use as an request identifier when interacting with another system. Since it was a request identifier, I needed it to be random to minimize the chance of two identifiers being the same. Additionally, I had the requirement that it needed to consist of a case insensitive alphanumeric string. Due to the eight character limit, UUIDs were out, so I had to find another way to generate the identifier.</p>
+<p>The first thing that came to mind was just to generate a four byte value and convert it to hex. That would give me about four billion possible values. The second way I thought of was to generate a random number and use it to select from one of 36 possible values (10 digits plus 26 letters). This gets me 36^8 = 2.8 trillion possible values. This second method reminded me of base-32 binary encoding, a close cousin of base-64 encoding that uses 0-9 and A-T to encode values, so I thought it'd be neat to try this as a method as well. To get an eight character string (stripping off the padding), you end up passing it five bytes for a grand total of about one trillion possible values.</p>
+<p>All three are pretty simple to implement:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">string</span>
+
+<span class="c1"># Method 1) Generate a 4 byte hex string</span>
+<span class="n">random</span><span class="o">.</span><span class="n">randbytes</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">hex</span><span class="p">()</span>
+
+<span class="c1"># Method 2) use the random.choice method to</span>
+<span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choices</span><span class="p">(</span><span class="n">string</span><span class="o">.</span><span class="n">digits</span><span class="o">+</span><span class="n">string</span><span class="o">.</span><span class="n">ascii_uppercase</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">8</span><span class="p">))</span>
+
+<span class="c1"># Method 3) Generate a 5 byte value and base32 encode it</span>
+<span class="n">base64</span><span class="o">.</span><span class="n">b32encode</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randbytes</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;=&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>I was curious about the timing, so I used <code>timeit</code> to compare. This ran on a 10 year old Intel Macbook on Python 3.12.2.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">timeit</span>
+
+<span class="c1"># Took 0.7197803930030204</span>
+<span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span>
+    <span class="s1">&#39;random.randbytes(4).hex()&#39;</span><span class="p">,</span>
+    <span class="n">setup</span><span class="o">=</span><span class="s1">&#39;import random&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># Took 3.2596622809651308</span>
+<span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span>
+    <span class="s1">&#39;base64.b32encode(random.randbytes(5)).rstrip(b&quot;=&quot;)&#39;</span><span class="p">,</span>
+    <span class="n">setup</span><span class="o">=</span><span class="s2">&quot;import random; import base64&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Took 2.2838933810126036</span>
+<span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span>
+    <span class="s1">&#39;&quot;&quot;.join(random.choices(ALL_DIGITS, k=8))&#39;</span><span class="p">,</span>
+    <span class="n">setup</span><span class="o">=</span><span class="s2">&quot;import random; import string; ALL_DIGITS=string.digits+string.ascii_uppercase&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>It would seem that the <code>base64</code> method is not the way to go as it takes the longest and generates fewer distinct values than the hex approach. The <code>random.choices</code> approach presents a tradeoff of about three times more latency for three orders of magnitude more possible values. In my case, that tradeoff made sense, but different applications may prefer the performance.</p>                </article>
+            </aside><!-- /#featured -->
+                <section id="content" class="body">
+                    <h1>Other articles</h1>
+                    <hr />
+                    <ol id="posts-list" class="hfeed">
+
+            <li><article class="hentry">
+                <header>
+                    <h1><a href="/til-fastapi-supports-extended-http-methods.html" rel="bookmark"
+                           title="Permalink to "TIL: FastAPI Supports Extended HTTP Methods"">"TIL: FastAPI Supports Extended HTTP Methods"</a></h1>
+                </header>
+
+                <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2024-06-21T20:00:00-05:00">
+                Published: Fri 21 June 2024
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/david-bonsall.html">David Bonsall</a>
+        </address>
+<p>In <a href="/category/posts.html">posts</a>.</p>
+
+</footer><!-- /.post-info -->                <p>The other day, I was looking to emulate some webDAV functionality that required use of non-standard HTTP methods: <code>LOCK</code> and <code>UNLOCK</code>. While these are fully specified in <a href="https://datatracker.ietf.org/doc/html/rfc4918#section-9.10">RFC 4918</a>, they are not the kind of thing you typically see explicitly supported by web frameworks out of the box. Neither FastAPI …</p>
+                <a class="readmore" href="/til-fastapi-supports-extended-http-methods.html">read more</a>
+                </div><!-- /.entry-content -->
+            </article></li>
+
+            <li><article class="hentry">
+                <header>
+                    <h1><a href="/til-aws-waf-rejects-request-with-localhost-urls-in-body.html" rel="bookmark"
+                           title="Permalink to "TIL: AWS WAF Rejects Request with localhost URLs in Body"">"TIL: AWS WAF Rejects Request with localhost URLs in Body"</a></h1>
+                </header>
+
+                <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2024-05-09T08:00:00-05:00">
+                Published: Thu 09 May 2024
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/david-bonsall.html">David Bonsall</a>
+        </address>
+<p>In <a href="/category/posts.html">posts</a>.</p>
+
+</footer><!-- /.post-info -->                <p>While testing out a new feature for an AWS app, I encountered 403 errors on HTTP requests being placed to the service I had built. The error response body contained HTML for a generic AWS Cloudfront 403 Forbidden error page prompting me to try again later, or contact my sys …</p>
+                <a class="readmore" href="/til-aws-waf-rejects-request-with-localhost-urls-in-body.html">read more</a>
+                </div><!-- /.entry-content -->
+            </article></li>
+                </ol><!-- /#posts-list -->
+                </section><!-- /#content -->
+        <section id="extras" class="body">
+                <div class="blogroll">
+                        <h2>links</h2>
+                        <ul>
+                            <li><a href="https://github.com/dmbonsall">Github</a></li>
+                        </ul>
+                </div><!-- /.blogroll -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a rel="nofollow" href="https://getpelican.com/">Pelican</a>, which takes great advantage of <a rel="nofollow" href="https://www.python.org/">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a rel="nofollow" href="https://www.smashingmagazine.com/2009/08/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
