@@ -1,0 +1,9 @@
+---
+title: "TIL: CSV Newlines"
+date: 2024-09-06T20:00:00
+draft: True
+---
+
+https://www.rfc-editor.org/rfc/rfc4180
+https://stackoverflow.com/questions/31807037/csv-correct-line-endings
+https://docs.python.org/3/library/csv.html
